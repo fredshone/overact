@@ -26,7 +26,8 @@ jobs:
       - run: cargo test --workspace
       - run: cargo test -p overact-core --features parallel --release
       - name: Native benchmark (demo dataset, prints the budget table)
-        run: cargo bench -p overact-core --bench engine -- web/public/demo/demo.overact
+        # Benches run from the crate dir; the default file is the demo dataset.
+        run: cargo bench -p overact-core --bench engine
 
   python:
     runs-on: ubuntu-latest

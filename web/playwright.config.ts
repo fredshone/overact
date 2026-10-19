@@ -4,7 +4,8 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: 'tests',
   timeout: 60_000,
-  reporter: [['list']],
+  // In CI, `github` also reports failures as annotations on the run.
+  reporter: process.env.CI ? [['list'], ['github']] : [['list']],
   use: { baseURL: 'http://localhost:4173', viewport: { width: 1400, height: 860 } },
   webServer: {
     command: 'npm run build && npx vite preview --port 4173 --strictPort',
