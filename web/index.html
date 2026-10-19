@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="View and compare human activity schedules in the browser. Local-first: nothing is uploaded." />
+    <title>overact</title>
+    <!-- The resolved theme before first paint (App.svelte keeps it in sync). -->
+    <script>
+      document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    </script>
+    <!-- Threads need a cross-origin isolated page. GitHub Pages cannot set the
+         COOP/COEP headers, so this service worker adds them (MIT, gzuidhof/coi-serviceworker).
+         Set localStorage "overact.threads" to "off" to opt out. -->
+    <script>
+      window.coi = {
+        shouldRegister: () => { try { return localStorage.getItem('overact.threads') !== 'off' } catch { return true } },
+        shouldDeregister: () => { try { return localStorage.getItem('overact.threads') === 'off' } catch { return false } },
+        quiet: true,
+      }
+    </script>
+    <script src="./coi-serviceworker.min.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

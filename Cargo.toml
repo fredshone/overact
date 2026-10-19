@@ -1,0 +1,17 @@
+[workspace]
+resolver = "2"
+members = ["crates/overact-core", "crates/overact-ingest", "crates/overact-wasm"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = false
+
+[profile.bench]
+debug = true

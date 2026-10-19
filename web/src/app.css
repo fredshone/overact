@@ -1,0 +1,210 @@
+:root {
+  --bg: #f6f5f2;
+  --panel: #ffffff;
+  --canvas-bg: #ffffff;
+  --fg: #1d1d1f;
+  --muted: #6b6b70;
+  --line: #dddbd5;
+  --accent: #2f5bd3;
+  --accent-fg: #ffffff;
+  --chip: #eeece6;
+  --chip-hover: #e3e0d8;
+  --danger: #b3261e;
+  --shadow: 0 6px 24px rgb(0 0 0 / 0.14);
+  --radius: 6px;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  color-scheme: light;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* data-theme is set before first paint (index.html) and kept in sync by App.svelte. */
+:root[data-theme='dark'] {
+  --bg: #161618;
+  --panel: #1f1f22;
+  --canvas-bg: #121214;
+  --fg: #e8e8ea;
+  --muted: #9a9aa2;
+  --line: #34343a;
+  --accent: #7c9cff;
+  --accent-fg: #0b0b0c;
+  --chip: #2a2a2f;
+  --chip-hover: #35353b;
+  --danger: #ff6b60;
+  --shadow: 0 6px 24px rgb(0 0 0 / 0.5);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--chip);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+button:hover {
+  background: var(--chip-hover);
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+button.primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+button.ghost {
+  background: transparent;
+}
+button.ghost:hover {
+  background: var(--chip);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+input,
+select {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 3px 6px;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 1px 4px 1px 9px;
+  white-space: nowrap;
+  max-width: 100%;
+  font-size: 12px;
+}
+.chip .x {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: transparent;
+  line-height: 1.3;
+}
+.chip .x:hover {
+  background: var(--chip-hover);
+}
+
+.popover {
+  position: absolute;
+  z-index: 50;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
+
+/* Shared bits used by several components. */
+.small {
+  font-size: 11px;
+}
+
+button.icon {
+  display: inline-grid;
+  place-items: center;
+  padding: 3px 5px;
+}
+button.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* A segmented control: a row of buttons, one of them on. */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.seg button {
+  border-radius: 0;
+  background: transparent;
+}
+.seg button.on {
+  background: var(--chip-hover);
+  font-weight: 600;
+}
+
+/* The dashed "+ filter" / "+ sort" buttons. */
+button.add {
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+button.add:hover {
+  color: var(--fg);
+}
+
+/* An activity colour swatch in text. */
+.sw {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+  border: 1px solid rgb(0 0 0 / 0.15);
+}
+
+/* Positions a popover under the element before it. */
+.anchor {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 40;
+}
+.anchor > .popover {
+  position: relative;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  background: var(--panel);
+}

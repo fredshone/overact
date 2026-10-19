@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>overact benchmark</title>
+    <style>
+      body { font: 13px system-ui, sans-serif; margin: 20px; }
+      table { border-collapse: collapse; }
+      td, th { border-bottom: 1px solid #ddd; padding: 3px 10px; text-align: left; }
+      td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <h1>overact benchmark</h1>
+    <p>Pass <code>?file=URL</code> (served with Range support). Results also go to the console as JSON.</p>
+    <pre id="status"></pre>
+    <table id="out"><thead><tr><th>operation</th><th>WASM (worker)</th><th>plain TS</th><th>target</th><th>notes</th></tr></thead><tbody></tbody></table>
+    <script type="module" src="/src/bench/bench.ts"></script>
+  </body>
+</html>

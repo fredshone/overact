@@ -1,0 +1,22 @@
+[package]
+name = "overact-core"
+description = "Columnar engine for human activity schedules: format, filter, sort, raster, profile"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# Multi-threaded hot loops (rayon). Results are identical to single-threaded.
+parallel = ["dep:rayon"]
+
+[dependencies]
+rayon = { version = "1.10", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[dev-dependencies]
+proptest = "1"
+
+[[bench]]
+name = "engine"
+harness = false

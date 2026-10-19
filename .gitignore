@@ -1,0 +1,16 @@
+/target
+/data
+/scratch
+node_modules
+/web/dist
+/web/src/wasm/pkg
+/web/src/wasm/pkg-mt
+/web/test-results
+/web/playwright-report
+__pycache__
+.venv
+.pytest_cache
+.ruff_cache
+*.overact
+!/web/public/demo/*.overact
+!/crates/overact-core/tests/data/*.overact
