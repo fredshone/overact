@@ -1,7 +1,8 @@
 // Captures frame sequences for the README GIFs (run against `npx vite`).
 // Usage: node scripts/capture-media.mjs <outdir> <tabledir>
-// Sequence 4 opens the two demos from public/demo.
+// Sequences 4 and 5 open the demos from public/demo.
 // <tabledir> holds activities.csv and attributes.csv from `overact-synth -n 200000 --format csv`.
+// ONLY=summary (or another sequence name among datasets, summary) captures just that one; no <tabledir> needed.
 // Then: uv run --project ../py --with pillow python ../py/scripts/make_gif.py <outdir>
 import { chromium } from 'playwright'
 import fs from 'node:fs'
@@ -9,7 +10,8 @@ import path from 'node:path'
 
 const out = process.argv[2] ?? '/tmp/overact-frames'
 const tables = process.argv[3]
-if (!tables) throw new Error('usage: capture-media.mjs <outdir> <tabledir>')
+const only = process.env.ONLY
+if (!tables && !only) throw new Error('usage: capture-media.mjs <outdir> <tabledir>')
 const base = process.env.BASE ?? 'http://localhost:5173'
 fs.mkdirSync(out, { recursive: true })
 const browser = await chromium.launch()
@@ -24,7 +26,10 @@ async function frame(hold = 1) {
 }
 const idle = () => page.waitForFunction(() => !document.querySelector('.window .bar'), null, { timeout: 60_000 })
 
+const run = (name) => !only || only === name
+
 // 1. Load the schedules and attributes tables.
+if (run('load')) {
 seq = 'load'
 n = 0
 await page.goto(base)
@@ -111,8 +116,10 @@ await frame(8)
 await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.42)
 await page.waitForTimeout(600)
 await frame(16)
+}
 
 // 4. Compare the two demo datasets: employed persons in each.
+if (run('datasets')) {
 seq = 'datasets'
 n = 0
 await page.goto(base)
@@ -151,5 +158,57 @@ for (const f of [0.3, 0.38, 0.46, 0.54, 0.62]) {
 await page.mouse.move(dbox.x + dbox.width * 0.62, dbox.y - 40)
 await page.waitForTimeout(300)
 await frame(10)
+}
+
+// 5. Summary charts of employed and not employed persons.
+if (run('summary')) {
+seq = 'summary'
+n = 0
+await page.goto(base)
+await page.getByRole('button', { name: 'Demo dataset' }).click()
+await page.waitForSelector('.window .count b', { timeout: 120_000 })
+await idle()
+const s1 = page.locator('.window').nth(0)
+await s1.getByText('+ filter').click()
+await page.keyboard.type('employment', { delay: 30 })
+await page.keyboard.press('Enter')
+await page.getByLabel('ft-employed').check()
+await page.getByLabel('pt-employed').check()
+await page.getByRole('button', { name: 'Add filter' }).click()
+await idle()
+await s1.locator('input.title').fill('Employed')
+await s1.getByTitle('Clone window').click()
+await idle()
+const s2 = page.locator('.window').nth(1)
+await s2.locator('.chip.filter .text').first().click()
+await page.getByText('Exclude matches (NOT)').click()
+await page.getByRole('button', { name: 'Update' }).click()
+await idle()
+await s2.locator('input.title').fill('Not employed')
+await s2.locator('input.title').blur()
+await page.waitForTimeout(1200)
+await frame(12)
+await page.getByRole('button', { name: 'Summary', exact: true }).click()
+await page.locator('.window .panel h3', { hasText: 'Transitions' }).first().waitFor()
+await page.waitForTimeout(1500)
+await frame(16)
+const panel = s1.locator('.panel')
+const pbox = await panel.boundingBox()
+await page.mouse.move(pbox.x + pbox.width * 0.5, pbox.y + pbox.height * 0.5)
+for (const name of ['When and how long', 'Participation and time use', 'Transitions']) {
+  const top = await panel.evaluate((el, name) => {
+    const h = [...el.querySelectorAll('h3')].find((h) => h.textContent.startsWith(name))
+    return h.getBoundingClientRect().top - el.getBoundingClientRect().top + el.scrollTop - 8
+  }, name)
+  const from = await panel.evaluate((el) => el.scrollTop)
+  for (let i = 1; i <= 4; i++) {
+    await panel.evaluate((el, y) => (el.scrollTop = y), from + ((top - from) * i) / 4)
+    await page.waitForTimeout(80)
+    await frame(1)
+  }
+  await page.waitForTimeout(600)
+  await frame(16)
+}
+}
 await browser.close()
 console.log(`frames in ${out}`)
