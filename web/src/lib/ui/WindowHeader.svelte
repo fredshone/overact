@@ -14,6 +14,8 @@
   const ds = untrack(() => app.datasetOf(win))
   const h = ds.header
   const nPersons = h.n_persons
+  // The name can change (the dataset manager renames).
+  const dsName = $derived(app.datasetOf(win).name)
 
   type Pop =
     | { kind: 'filterCol' }
@@ -84,8 +86,8 @@
   const sampled = $derived(win.count !== null && win.matched !== null && win.count < win.matched)
   const countTitle = $derived(
     (sampled
-      ? `${win.count?.toLocaleString()} sampled from ${win.matched?.toLocaleString()} matching, of ${nPersons.toLocaleString()} persons in ${ds.name}`
-      : `${win.count?.toLocaleString() ?? '…'} of ${nPersons.toLocaleString()} persons in ${ds.name}`) +
+      ? `${win.count?.toLocaleString()} sampled from ${win.matched?.toLocaleString()} matching, of ${nPersons.toLocaleString()} persons in ${dsName}`
+      : `${win.count?.toLocaleString() ?? '…'} of ${nPersons.toLocaleString()} persons in ${dsName}`) +
       (win.jobMs ? ` · computed in ${win.jobMs.toFixed(0)} ms` : ''),
   )
 </script>
@@ -116,7 +118,7 @@
         {#each app.datasets as d (d.id)}<option value={d.id}>{d.name}</option>{/each}
       </select>
     {/if}
-    <button class="ghost icon" title="Clone window" aria-label="Clone window" disabled={app.windows.length >= MAX_WINDOWS} onclick={() => app.addWindow(win)}><Icon name="clone" /></button>
+    <button class="ghost icon clone" title="Clone window" aria-label="Clone window" disabled={app.windows.length >= MAX_WINDOWS} onclick={() => app.addWindow(win)}><Icon name="clone" /></button>
     <button class="ghost icon" title="More" aria-label="More actions" onclick={() => (pop = pop?.kind === 'menu' ? null : { kind: 'menu' })}><Icon name="more" /></button>
     {#if app.windows.length > 1}
       <button class="ghost icon" title="Close window" aria-label="Close window" onclick={() => app.removeWindow(win.id)}><Icon name="close" size={13} /></button>
@@ -165,6 +167,7 @@
   {:else if pop?.kind === 'menu'}
     <div class="anchor right">
       <div class="popover menu" role="menu">
+        <button class="ghost narrow-only" role="menuitem" disabled={app.windows.length >= MAX_WINDOWS} onclick={() => { app.addWindow(win); pop = null }}>Clone window</button>
         {#each others as o (o.id)}
           <button class="ghost" role="menuitem" onclick={() => { app.copyFilter(win, o); pop = null }}>Copy filter to “{o.title}”</button>
         {/each}
@@ -186,12 +189,35 @@
     padding: 6px 8px 4px;
     border-bottom: 1px solid var(--line);
     display: grid;
+    /* minmax: long filter chips must not widen the header past the window. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 3px;
+    /* Stretched to the tallest header in the row: keep the content at the top. */
+    align-content: start;
+    container-type: inline-size;
   }
+  /* Only the title, count and dataset menu shrink: the buttons always fit. */
   .top {
     display: flex;
     align-items: center;
     gap: 6px;
+    min-width: 0;
+  }
+  .top > button {
+    flex: none;
+  }
+  .narrow-only {
+    display: none;
+  }
+  @container (max-width: 240px) {
+    .count,
+    .clone,
+    .spacer {
+      display: none;
+    }
+    .narrow-only {
+      display: block;
+    }
   }
   .grip {
     display: grid;
@@ -208,6 +234,8 @@
   }
   .dataset {
     max-width: 140px;
+    min-width: 0;
+    flex: 0 1 auto;
     font-size: 12px;
     padding: 1px 4px;
   }
@@ -217,9 +245,10 @@
     border-color: transparent;
     background: transparent;
     padding: 2px 4px;
-    min-width: 60px;
+    min-width: 0;
     width: 0;
-    flex: 0 1 220px;
+    flex: 1 1 220px;
+    max-width: 220px;
   }
   .title:hover {
     border-color: var(--line);
@@ -227,6 +256,9 @@
   .count {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .spacer {
     flex: 1;
@@ -249,7 +281,11 @@
     font-size: 11px;
     width: 42px;
   }
+  .chip {
+    min-width: 0;
+  }
   .chip .text {
+    min-width: 0;
     padding: 0;
     background: transparent;
     overflow: hidden;

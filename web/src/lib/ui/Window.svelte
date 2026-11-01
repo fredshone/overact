@@ -28,12 +28,14 @@
   // A window's dataset never changes (showing another replaces the window).
   const ds = untrack(() => app.datasetOf(win))
   const client = ds.client
+  // The name can change (the dataset manager renames).
+  const dsName = $derived(app.datasetOf(win).name)
 
   const rows = $derived(app.rowRange(win))
   // The shared sort, as this dataset sees it.
   const sortKeys = $derived(app.sortFor(ds))
   // The gutter shows the primary key, if this dataset has it.
-  const gutterKey = $derived(app.sort.length && !app.sortMissing(0).includes(ds.name) ? sortKeys[0] : undefined)
+  const gutterKey = $derived(app.sort.length && !app.sortMissing(0).includes(dsName) ? sortKeys[0] : undefined)
   // Scroll thumb when only some rows are shown.
   const thumb = $derived.by(() => {
     const { span, total } = app.extent(win)
@@ -223,12 +225,31 @@
     return t0 + (x / cssW) * (t1 - t0)
   }
 
+  // Wheel: scroll the rows. Shift-wheel, Ctrl/⌘-wheel or a trackpad pinch
+  // (sent as Ctrl-wheel): zoom the rows about the pointer (sets Show).
+  // A sideways trackpad swipe pans a cropped time axis.
   function onWheel(e: WheelEvent) {
-    if (e.ctrlKey || e.metaKey) return // leave browser zoom alone
+    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      // Browsers may turn Shift-wheel into a sideways scroll.
+      const d = (e.deltaY || e.deltaX) * scale
+      // Pinches send small deltas: make them as quick as a wheel.
+      const rate = e.ctrlKey && !e.shiftKey && Math.abs(d) < 50 ? 0.01 : 0.002
+      const r = overlay.getBoundingClientRect()
+      app.zoomRows(Math.exp(d * rate), win, Math.max(0, Math.min(1, (e.clientY - r.top) / Math.max(1, cssH))))
+      return
+    }
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      if (!app.crop.on) return
+      e.preventDefault()
+      app.touch()
+      app.panTime(((e.deltaX * scale) / Math.max(1, cssW)) * (app.time.t1 - app.time.t0))
+      return
+    }
     const { span, total } = app.extent(win)
     if (!(total > span)) return
     e.preventDefault()
-    const scale = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? cssH : 1
     app.scrollRows(e.deltaY * scale, cssH, win)
   }
 
@@ -346,12 +367,13 @@
 
 <section class="window" class:dragging={app.draggingWin === win.id} data-win={win.id} aria-label={win.title}>
   <WindowHeader {win} />
+  <div class="rest">
   {#if app.showProfiles}
     <ProfileStrip {win} width={cssW} />
   {/if}
   <TimeAxis width={cssW} {win} />
   <div class="main">
-    <div class="gutter" title={gutterKey ? `Sorted by ${colName(H, gutterKey.col)}` : app.sort.length ? `Not sorted by the first key: not in ${ds.name}` : 'Not sorted'}>
+    <div class="gutter" title={gutterKey ? `Sorted by ${colName(H, gutterKey.col)}` : app.sort.length ? `Not sorted by the first key: not in ${dsName}` : 'Not sorted'}>
       <canvas
         bind:this={gutterEl}
         onpointermove={onGutterMove}
@@ -394,6 +416,7 @@
       {/if}
     </div>
   </div>
+  </div>
   {#if pinned}
     <div class="pinned">
       <div class="pin-head">
@@ -417,16 +440,34 @@
 
 
 <style>
+  /* Side by side, the windows share the rows of the .windows grid, so every
+     header is as tall as the tallest and the schedules line up. */
   .window {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-row: span 2;
+    grid-template-rows: subgrid;
     min-width: 0;
     min-height: 0;
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: 8px;
     overflow: hidden;
+  }
+  .rest {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  @media (max-width: 700px) {
+    .window {
+      display: flex;
+      flex-direction: column;
+      grid-row: auto;
+    }
+    .rest {
+      flex: 1;
+    }
   }
   .window.dragging {
     border-color: var(--accent);

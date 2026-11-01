@@ -9,6 +9,7 @@
   import Help from './lib/ui/Help.svelte'
   import MainMenu from './lib/ui/MainMenu.svelte'
   import DatasetInfo from './lib/ui/DatasetInfo.svelte'
+  import DatasetManager from './lib/ui/DatasetManager.svelte'
   import type { RenderMode } from './lib/engine/types'
   import Toolbar from './lib/ui/Toolbar.svelte'
   import { encodeHash } from './lib/viewconfig'
@@ -33,8 +34,11 @@
       app.showHelp = !app.showHelp
       return
     }
-    if (e.key === 'Escape') app.showHelp = false
-    if (!app.datasets.length || app.adding) return
+    if (e.key === 'Escape') {
+      app.showHelp = false
+      if (!app.adding) app.managing = false
+    }
+    if (!app.datasets.length || app.adding || app.managing) return
     const h = app.windowHeight
     const handled = (() => {
       switch (e.key) {
@@ -133,6 +137,7 @@
         {/if}
       </button>
       <button class="ghost with-icon" onclick={() => app.startAdding()} title="Load another dataset to compare with"><Icon name="plus" size={13} /> Dataset</button>
+      <button class="ghost" onclick={() => (app.managing = true)} title="See, rename and remove the loaded datasets">Manage datasets</button>
       <span class="spacer"></span>
       <div class="seg" role="group" aria-label="Vertical scale">
         <button class:on={app.vertical.mode === 'fit'} onclick={() => app.setVerticalMode('fit')} title="Each window's population fills its height (percentiles line up)">Fit</button>
@@ -159,6 +164,9 @@
       {/each}
     </main>
   </div>
+  {#if app.managing}
+    <div class="adding" role="dialog" aria-label="Manage datasets"><DatasetManager /></div>
+  {/if}
   {#if app.adding}
     <div class="adding" role="dialog" aria-label="Add a dataset"><Loader /></div>
   {/if}
@@ -213,12 +221,16 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    gap: 8px;
+    /* Headers, then schedules: each window spans both (see Window.svelte). */
+    grid-template-rows: auto minmax(0, 1fr);
+    column-gap: 8px;
     padding: 8px;
   }
   @media (max-width: 700px) {
     .windows {
       grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: none;
+      row-gap: 8px;
       grid-auto-rows: minmax(300px, 1fr);
       overflow: auto;
     }
