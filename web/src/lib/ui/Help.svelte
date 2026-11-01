@@ -19,8 +19,9 @@
     ['N', 'new window'],
     ['M', 'cycle mean / majority / sample colour'],
     ['T', 'cycle theme'],
+    ['S', 'switch between schedules and summary charts'],
     ['P', 'show / hide profile strips'],
-    ['Drag the bar under a strip', 'resize the strips of all windows (double-click: reset)'],
+    ['Drag the bar under a strip or sequence chart', 'resize it in all windows (double-click: reset)'],
     ['?', 'this help'],
   ]
 </script>
@@ -47,6 +48,12 @@
       scale of the strip at the left of each window), <b>Crop</b> to a time range (or zoom on a time axis), <b>Sample</b> to keep a random
       number of each window's filtered persons, and <b>Show</b> to fix how many rows each window displays.
       With few rows each person's schedule is drawn as a tall band; scroll to move through the rest.
+    </p>
+    <p>
+      <b>Summary</b> replaces each window's schedules with charts of the same persons: the most common
+      activity sequences (ignoring durations), when activities start and how long they last, how many
+      persons do each activity and for how long, and which activity follows which. Back-to-back rows of one
+      activity count as one episode. Scales are shared by all windows so they compare directly.
     </p>
     <p>
       <b>Fit</b> stretches each window's population to its height, so the same height is the same percentile in

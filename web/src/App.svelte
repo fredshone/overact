@@ -92,6 +92,10 @@
           app.panTime((e.key === 'ArrowLeft' ? -0.2 : 0.2) * span)
           return true
         }
+        case 's':
+        case 'S':
+          app.setMode(app.mode === 'summary' ? 'schedules' : 'summary')
+          return true
         case 'p':
         case 'P':
           app.showProfiles = !app.showProfiles
@@ -139,6 +143,11 @@
       <button class="ghost with-icon" onclick={() => app.startAdding()} title="Load another dataset to compare with"><Icon name="plus" size={13} /> Dataset</button>
       <button class="ghost" onclick={() => (app.managing = true)} title="See, rename and remove the loaded datasets">Manage datasets</button>
       <span class="spacer"></span>
+      <div class="seg" role="group" aria-label="Window contents">
+        <button class:on={app.mode === 'schedules'} onclick={() => app.setMode('schedules')} title="Each window shows its persons' schedules (S)">Schedules</button>
+        <button class:on={app.mode === 'summary'} onclick={() => app.setMode('summary')} title="Each window shows summary charts of its persons: sequences, start times and durations, participation, transitions (S)">Summary</button>
+      </div>
+      {#if app.mode === 'schedules'}
       <div class="seg" role="group" aria-label="Vertical scale">
         <button class:on={app.vertical.mode === 'fit'} onclick={() => app.setVerticalMode('fit')} title="Each window's population fills its height (percentiles line up)">Fit</button>
         <button class:on={app.vertical.mode === 'rows'} onclick={() => app.setVerticalMode('rows')} title="Same persons per pixel row in every window">Rows</button>
@@ -148,6 +157,7 @@
         <button class:on={app.renderMode === 1} onclick={() => (app.renderMode = 1)} title="Most common activity in each pixel">Majority</button>
         <button class:on={app.renderMode === 2} onclick={() => (app.renderMode = 2)} title="Activity of the first person in each pixel row">Sample</button>
       </div>
+      {/if}
       <button class="with-icon" onclick={() => app.addWindow()} disabled={app.windows.length >= MAX_WINDOWS} title="New window (N)"><Icon name="plus" size={13} /> Window</button>
       <button class="ghost icon" onclick={() => app.cycleTheme()} title="Theme: {app.theme} (T)" aria-label="Theme: {app.theme}"><Icon name="theme" /></button>
       <button class="ghost icon" onclick={() => (app.showHelp = true)} title="Help (?)" aria-label="Help"><Icon name="help" /></button>

@@ -208,3 +208,22 @@ kbd {
   padding: 0 4px;
   background: var(--panel);
 }
+
+/* Hover tooltips of the summary charts. */
+.stip {
+  position: absolute;
+  z-index: 6;
+  max-width: 260px;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  box-shadow: var(--shadow);
+  width: max-content;
+}
+.caption {
+  margin: 6px 0 0;
+  font-size: 11px;
+}

@@ -73,6 +73,35 @@ between views and jobs instead of copied, so changing the sort or sample no
 longer copies the filter result. WASM memory never shrinks, so these peaks
 are what the tab keeps.
 
+## Summary mode (`overact-core/src/summary.rs`)
+
+One pass over a view's members fills every summary chart: top sequences,
+start × duration densities, participation, transitions and 3/4-grams. It runs
+only while Summary mode is on, as a follow-up job after the profile, and it is
+reused while the filter and sample stay the same (changing the sort is free).
+Measured 2026-11-01, same machine and synthetic 10M data as above:
+
+| Summary | 1 thread | 8 threads |
+|---|---|---|
+| Native, all 10M persons (`cargo bench`) | 2.5–2.7 s | 0.65 s |
+| Browser app path, the 4.7M employed (`npm run bench`) | 2.1 s | 0.92 s |
+
+That's about 13× the profile, because each person costs about 60 counter
+updates instead of about 14. What mattered:
+
+- The sequence key was first built with variable-width `u128` shifts, which
+  cost about 1 s of the 3.4 s at 10M. Constant shifts (`k = k << 5 | code`)
+  fixed that.
+- A minute → bin lookup table replaced divisions by the runtime bin width,
+  and only the activities a person actually does are visited: about 10%.
+- The worker's adaptive steps are about 12 ms, which is too few persons to
+  reach the profile's 2^16 cutoff for the parallel path. At first the threaded
+  build never split the work (3.4 s with threads). The summariser now splits
+  from 2^14 persons, in 2^12 chunks.
+- The sequence map stays small: 62,978 distinct sequences among 10M synthetic
+  persons (a few MB). Real survey data will have more, but at most one entry
+  per person.
+
 ## Is WASM worth it? (same thread, same data, no job overhead)
 
 | Hot loop, 10M persons | WASM | plain TypeScript |

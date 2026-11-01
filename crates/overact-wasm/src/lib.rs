@@ -336,6 +336,20 @@ impl WasmEngine {
         v.profile.as_ref().map(|p| p.to_vec())
     }
 
+    /// Asks for a view's summary: true if a `summarized` event will follow,
+    /// false if it is ready now (or the view does not exist).
+    pub fn request_summary(&mut self, view: u32) -> bool {
+        self.engine.request_summary(view)
+    }
+
+    /// A view's summary as JSON (see `overact_core::summary::Summary`), or null.
+    pub fn summary(&self, view: u32) -> String {
+        match self.engine.view(view).and_then(|v| v.summary.as_ref()) {
+            Some(s) => serde_json::to_string(&**s).unwrap(),
+            None => "null".into(),
+        }
+    }
+
     /// A view's person ids in row order. `csv`: a `person_id,row` CSV file;
     /// otherwise UTF-8 strings as `u32 offsets[count + 1]` then the bytes.
     pub fn export_ids(&self, view: u32, csv: bool) -> Result<Vec<u8>, JsError> {

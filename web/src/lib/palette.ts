@@ -38,8 +38,42 @@ export function defaultColors(labels: string[]): string[] {
   })
 }
 
+/** `#rrggbb` or `#rgb` (as minified CSS has it) as 0xRRGGBB. */
 export function hexToInt(hex: string): number {
-  return parseInt(hex.replace('#', '').slice(0, 6), 16) || 0
+  let h = hex.trim().replace('#', '')
+  if (h.length === 3 || h.length === 4) h = [...h.slice(0, 3)].map((c) => c + c).join('')
+  return parseInt(h.slice(0, 6), 16) || 0
+}
+
+/** `#rrggbb` as a little-endian RGBA pixel (as `Uint32Array` views of ImageData see it). */
+export function pixel(hex: string): number {
+  const c = hexToInt(hex)
+  return (0xff000000 | ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)) >>> 0
+}
+
+/** `#rrggbb` part way (t in [0, 1]) from colour `a` to colour `b`, in sRGB. */
+export function mix(a: string, b: string, t: number): string {
+  const x = hexToInt(a)
+  const y = hexToInt(b)
+  const ch = (s: number) => Math.round(((x >> s) & 255) * (1 - t) + ((y >> s) & 255) * t)
+  return '#' + ((ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).padStart(6, '0')
+}
+
+const LINEAR = Array.from({ length: 256 }, (_, i) => {
+  const c = i / 255
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+})
+
+/** `#rrggbb` as linear-light RGB (0..1), for averaging colours. */
+export function toLinear(hex: string): [number, number, number] {
+  const c = hexToInt(hex)
+  return [LINEAR[(c >> 16) & 255], LINEAR[(c >> 8) & 255], LINEAR[c & 255]]
+}
+
+/** A linear-light channel (0..1) as an sRGB byte. */
+export function fromLinear(x: number): number {
+  const c = x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055
+  return Math.max(0, Math.min(255, Math.round(c * 255)))
 }
 
 /** Sequential ramp (viridis-like) for the sort-key gutter; t in [0, 1]. */

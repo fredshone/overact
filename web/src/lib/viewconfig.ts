@@ -22,6 +22,8 @@ export interface ViewConfig {
   renderMode: RenderMode
   maxSamples: number
   profileHeight?: number
+  mode?: 'schedules' | 'summary'
+  sequenceHeight?: number
   sort?: NamedSortKey[]
   windows: { title: string; filter: NamedCondition[]; sort?: NamedSortKey[]; dataset?: number }[]
   // Older configs: a zoomed time range, and per-window sorts that could be linked.

@@ -156,11 +156,16 @@ fn parallel_matches_sequential() {
     let compute = || {
         let mut e = big_engine();
         run(&mut e, 1, spec.clone());
+        assert!(e.request_summary(1));
+        while e.has_work() {
+            e.step(1 << 22);
+        }
         let v = e.view(1).unwrap();
         let (rows, profile) = (v.rows.clone(), v.profile.clone().unwrap());
+        let summary = v.summary.clone().unwrap();
         (
             rows,
-            profile,
+            (profile, summary),
             draw(&mut e, RasterMode::Mean),
             draw(&mut e, RasterMode::Mode),
             draw(&mut e, RasterMode::Sample),
@@ -182,7 +187,7 @@ fn parallel_matches_sequential() {
         seq.0.len()
     );
     assert_eq!(seq.0, par.0, "rows");
-    assert_eq!(seq.1, par.1, "profile");
+    assert_eq!(seq.1, par.1, "profile and summary");
     assert_eq!(seq.2, par.2, "mean raster");
     assert_eq!(seq.3, par.3, "mode raster");
 }

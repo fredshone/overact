@@ -8,6 +8,7 @@ import type {
   PersonInfo,
   Request,
   Source,
+  Summary,
   TableFiles,
   TableMapping,
   ViewSpec,
@@ -95,6 +96,10 @@ export class EngineClient {
   }
   profile(view: number) {
     return this.call<Uint32Array | null>({ type: 'profile', view })
+  }
+  /** A view's summary, or null if not ready yet (a summaryReady event follows). */
+  summary(view: number) {
+    return this.call<Summary | null>({ type: 'summary', view })
   }
   gutter(view: number, col: ColRef, height: number, rowStart: number, rowEnd: number) {
     return this.call<Float64Array>({ type: 'gutter', view, col, height, rowStart, rowEnd })

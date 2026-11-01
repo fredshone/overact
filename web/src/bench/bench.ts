@@ -38,11 +38,13 @@ async function partA(): Promise<Header> {
   const client = new EngineClient()
   const ready = new Map<number, (ms: number) => void>()
   const profiled = new Map<number, () => void>()
+  const summarized = new Map<number, () => void>()
   const drawn: number[] = []
   const rasterOnly: number[] = []
   client.on((ev) => {
     if (ev.type === 'viewReady') ready.get(ev.view)?.(ev.ms)
     if (ev.type === 'profileReady') profiled.get(ev.view)?.()
+    if (ev.type === 'summaryReady') summarized.get(ev.view)?.()
     if (ev.type === 'drawn' && !ev.exact) {
       drawn.push(ev.ms)
       rasterOnly.push(ev.rasterMs ?? NaN)
@@ -95,6 +97,14 @@ async function partA(): Promise<Header> {
   await run(4, { filter: [empCond], sort: [] })
   const s = await run(4, { filter: [empCond], sort: [{ col: { column: age }, desc: false }, { col: { column: income }, desc: false }] })
   row('2-key sort (age, income) of the employed', s.rows, null, 'under 1.5 s', 'app path; filter reused')
+  // Wait for the profile job first, so the summary job runs alone.
+  await run(4, { filter: [empCond], sort: [{ col: { column: age }, desc: false }, { col: { column: income }, desc: false }] })
+  {
+    const t = performance.now()
+    const done = new Promise<void>((r) => summarized.set(4, r))
+    if ((await client.summary(4)) === null) await done
+    row('summary of the employed (sequences, densities, transitions)', performance.now() - t, null, '', 'app path; Summary mode only')
+  }
 
   say('raster (app path)')
   const canvas = document.createElement('canvas').transferControlToOffscreen()

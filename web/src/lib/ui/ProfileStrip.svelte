@@ -1,33 +1,15 @@
 <script lang="ts">
   import { app, type Win } from '../state.svelte'
   import { clock, pct } from '../format'
-  import { hexToInt } from '../palette'
+  import { pixel } from '../palette'
+  import ResizeBar from './ResizeBar.svelte'
 
-  let { win, width }: { win: Win; width: number } = $props()
+  /** `indent`: left margin, CSS px (beside the sort-key gutter, by default). */
+  let { win, width, indent = 11 }: { win: Win; width: number; indent?: number } = $props()
   let canvas: HTMLCanvasElement
   const dpr = $derived(app.dpr)
   const MIN_HEIGHT = 24
   const DEFAULT_HEIGHT = 108
-
-  // Dragging the divider below the strip resizes the strips of all windows.
-  let resize: { y: number; h: number } | null = null
-  function onDown(e: PointerEvent) {
-    if (e.button !== 0) return
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    resize = { y: e.clientY, h: app.profileHeight }
-  }
-  function onMove(e: PointerEvent) {
-    if (!resize) return
-    const max = Math.max(MIN_HEIGHT, Math.round(window.innerHeight * 0.6))
-    app.profileHeight = Math.round(Math.max(MIN_HEIGHT, Math.min(max, resize.h + e.clientY - resize.y)))
-  }
-  function onKey(e: KeyboardEvent) {
-    const d = e.key === 'ArrowUp' ? -8 : e.key === 'ArrowDown' ? 8 : 0
-    if (!d) return
-    e.preventDefault()
-    e.stopPropagation()
-    app.profileHeight = Math.max(MIN_HEIGHT, app.profileHeight + d)
-  }
 
   // Hover: the shared time line, and this window's activity mix at that minute.
   const lineX = $derived.by(() => {
@@ -55,12 +37,6 @@
   }
   function onStripLeave() {
     if (app.hover.win === win.id) app.hover = { minute: null, win: null }
-  }
-
-  /** `#rrggbb` as a little-endian RGBA pixel (as `Uint32Array` views of ImageData see it). */
-  function pixel(hex: string): number {
-    const c = hexToInt(hex)
-    return (0xff000000 | ((c & 0xff) << 16) | (c & 0xff00) | ((c >> 16) & 0xff)) >>> 0
   }
 
   // Exact share of each activity by minute, stacked from the top in activity
@@ -111,7 +87,7 @@
   })
 </script>
 
-<div class="wrap" class:stale={win.profilePending} role="presentation" onpointermove={onStripMove} onpointerleave={onStripLeave}>
+<div class="wrap" style:margin-left="{indent}px" class:stale={win.profilePending} role="presentation" onpointermove={onStripMove} onpointerleave={onStripLeave}>
   <canvas class="strip" bind:this={canvas} style:height="{app.profileHeight}px" aria-label="Activity shares by time of day"></canvas>
   {#if win.profilePending}
     <div class="pending muted" title="The shares above are for the previous rows; new ones follow">updating…</div>
@@ -128,29 +104,20 @@
     </div>
   {/if}
 </div>
-<!-- A focusable separator is the ARIA pattern for a resize handle. -->
-<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-<div
-  class="divider"
-  role="separator"
-  aria-orientation="horizontal"
-  aria-label="Resize activity share strips"
-  aria-valuenow={app.profileHeight}
-  aria-valuemin={MIN_HEIGHT}
-  tabindex="0"
+<!-- Dragging the bar below the strip resizes the strips of all windows. -->
+<ResizeBar
+  value={app.profileHeight}
+  set={(h) => (app.profileHeight = h)}
+  min={MIN_HEIGHT}
+  maxFraction={0.6}
+  reset={DEFAULT_HEIGHT}
+  label="Resize activity share strips"
   title="Drag to resize the strips in all windows; double-click to reset"
-  onpointerdown={onDown}
-  onpointermove={onMove}
-  onpointerup={() => (resize = null)}
-  onpointercancel={() => (resize = null)}
-  ondblclick={() => (app.profileHeight = DEFAULT_HEIGHT)}
-  onkeydown={onKey}
-></div>
+/>
 
 <style>
   .wrap {
     position: relative;
-    margin-left: 11px;
   }
   .strip {
     display: block;
@@ -196,19 +163,5 @@
     font-family: var(--mono);
     font-size: 11px;
     color: var(--muted);
-  }
-  .divider {
-    position: relative;
-    height: 5px;
-    cursor: ns-resize;
-    touch-action: none;
-    border-top: 1px solid var(--line);
-    border-bottom: 1px solid var(--line);
-    background: var(--chip);
-  }
-  .divider:hover,
-  .divider:focus-visible {
-    background: var(--accent);
-    outline: none;
   }
 </style>

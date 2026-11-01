@@ -33,6 +33,23 @@ uploaded**.
 - **Exact numbers.** A strip above each window shows the exact share of each
   activity by minute. Hover anywhere for the activity mix at that time in every
   window.
+- **Summary charts.** **Summary** (or `S`) swaps each window's schedules for
+  charts of the same persons, computed over the whole filtered population:
+  - **Sequences:** the most common activity sequences, ignoring durations,
+    stacked by share of persons, with the rarer ones below.
+  - **When and how long:** start time × duration densities per activity, or
+    histograms of start times or durations.
+  - **Participation and time use:** the share of persons doing each activity,
+    the time participants spend in it, episodes per participant, and how many
+    activities persons do in a day.
+  - **Transitions:** what follows each activity, and the most common 3- and
+    4-activity chains.
+
+  Scales are shared and scrolling is linked across windows, so groups compare
+  directly. Changing the sort costs nothing; a new filter recomputes the charts.
+
+![Summary charts of employed and not employed persons](docs/media/summary.gif)
+
 - **Shared controls.** The bar above the windows sets the sort keys (drag to
   reorder), an optional time crop, a random **Sample** of each window's
   filtered persons, and how many rows each window **Shows**.
@@ -194,7 +211,8 @@ comparison with plain TypeScript, and the effect of threads and SIMD.
 ```
 py/                   overact-synth, overact-validate, overact-pack wrapper (uv project)
 crates/overact-core/  pure Rust engine: format reader, filters, radix sort,
-                      rasteriser, profiles, derived schedule features, jobs
+                      rasteriser, profiles, summaries, derived schedule
+                      features, jobs
 crates/overact-ingest/ CSV / Parquet tables straight to a dataset: the
                       packing rules, in the browser and as `overact-pack`
 crates/overact-wasm/  thin wasm-bindgen API over the core
@@ -210,11 +228,15 @@ docs/                 FORMAT.md, PERFORMANCE.md, PALETTE.md
   CSV and Parquet tables are streamed through `overact-ingest` inside the
   worker (read synchronously with `FileReaderSync`); each person is cleaned and
   packed as soon as their rows end.
-- **Jobs.** Filters, sorts and profiles run in small steps, so a newer request
-  cancels an older one and drawing never waits.
+- **Jobs.** Filters, sorts, profiles and summaries run in small steps, so a
+  newer request cancels an older one and drawing never waits.
 - **Drawing.** Rasterisation draws pixel buffers, never DOM elements. When many
   persons share one pixel row it samples up to 32 of them, then refines with an
   exact pass once the view is still.
+- **Summaries.** One pass over a window's persons fills every summary chart.
+  It runs only in Summary mode and is reused until the filter or sample
+  changes. At 10 million persons it takes about 2.5 s single-threaded, or
+  0.65 s with threads (natively).
 - **Threads.** With threads (rayon, via `wasm-bindgen-rayon`) the same code
   runs in parallel and gives identical results.
 
