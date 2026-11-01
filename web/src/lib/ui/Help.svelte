@@ -3,6 +3,8 @@
 
   const keys: [string, string][] = [
     ['Scroll', 'move through persons (when Show limits the rows)'],
+    ['Shift-wheel, Ctrl-wheel or pinch on the schedules', 'zoom the rows in / out about the pointer (sets Show)'],
+    ['Sideways swipe on the schedules', 'pan the zoomed time axis'],
     ['Hover a schedule', "a person's details (zoomed out: the first person in that pixel row)"],
     ['Click a schedule', 'pin that person'],
     ['Drag the grip in a window title', 'move the window (or focus it and press ← / →)'],
@@ -54,6 +56,7 @@
       <b>+ Dataset</b> loads another dataset with the same time axis to compare with. Each window then has a
       dataset menu, and its ⋯ menu can clone it onto another dataset. Activities, columns and categories are
       matched by name; a sort key one dataset lacks is skipped in its windows (its chip is dashed).
+      <b>Manage datasets</b> lists what is loaded, with summaries, and lets you rename or remove datasets.
     </p>
     <button class="primary" onclick={() => (app.showHelp = false)}>Close</button>
   </div>

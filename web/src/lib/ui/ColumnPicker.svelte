@@ -2,7 +2,7 @@
   import { onMount, untrack } from 'svelte'
   import { outside } from './outside'
   import { app } from '../state.svelte'
-  import type { ColRef, Condition, Feature, Header, Measure } from '../engine/types'
+  import type { ColRef, Condition, Feature, Header, Measure, SortKey } from '../engine/types'
   import { colName, normalizeFeature, ordinal, sameCol } from '../format'
   import ScheduleFilter from './ScheduleFilter.svelte'
 
@@ -12,6 +12,7 @@
     onpick,
     onclose,
     onconditions,
+    onpreset,
     initial = null,
   }: {
     /** Columns to pick from (default: the union of the datasets). */
@@ -23,6 +24,8 @@
     onconditions?: (cs: Condition[]) => void
     /** A column being edited: preselected in the list or the measure builder. */
     initial?: ColRef | null
+    /** Sorts only: a preset replacing all the sort keys. */
+    onpreset?: (keys: SortKey[]) => void
   } = $props()
   const H = $derived(header ?? app.header!)
   const init = untrack(() => (initial ? normalizeCol($state.snapshot(initial) as ColRef) : null))
@@ -109,6 +112,19 @@
     })
   })
 
+  // --- Sort presets (several keys at once) ---
+  const duration = (nth: number): SortKey => ({
+    col: { feature: 'measure', measure: 'duration', activity: null, not: false, nth },
+    desc: false,
+  })
+  const PRESETS: { label: string; title: string; keys: () => SortKey[] }[] = [
+    {
+      label: 'Sequence durations (1st → 3rd)',
+      title: 'Sort by the duration of the first episode, then the second, then the third',
+      keys: () => [duration(1), duration(2), duration(3)],
+    },
+  ]
+
   onMount(() => {
     input.focus()
   })
@@ -188,6 +204,14 @@
     </div>
   </div>
   {/if}
+  {#if purpose === 'sort' && onpreset}
+    <div class="presets" role="group" aria-label="Sort presets">
+      <div class="group" title="A preset replaces the sort keys">Presets</div>
+      {#each PRESETS as p (p.label)}
+        <button class="item" title={p.title} onclick={() => onpreset(p.keys())}>{p.label}</button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -234,8 +258,17 @@
     border-top: 1px solid var(--line);
     padding-top: 2px;
   }
-  .builder .group {
+  .builder .group,
+  .presets .group {
     padding-left: 0;
+  }
+  .presets {
+    display: grid;
+    border-top: 1px solid var(--line);
+    padding-top: 2px;
+  }
+  .presets .item:hover {
+    background: var(--chip);
   }
   .seg {
     display: flex;

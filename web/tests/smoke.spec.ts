@@ -497,3 +497,93 @@ test('compare two datasets', async ({ page }) => {
   await expect(page.locator('.chip.sort.partial')).toHaveCount(0)
   expect(errors.join('\n')).toBe('')
 })
+
+test('narrow windows keep their buttons and headers line up', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 700 })
+  await open(page)
+  const add = page.getByRole('button', { name: 'Window', exact: true })
+  for (let i = 1; i < 6; i++) await add.click()
+  await waitIdle(page)
+  // Filters on one window only: its chips wrap, but every header is as tall.
+  const w1 = page.locator('.window').nth(0)
+  for (const value of ['ft-employed', 'pt-employed', 'student']) {
+    await w1.getByText('+ filter').click()
+    await page.keyboard.type('employment')
+    await page.keyboard.press('Enter')
+    await page.getByLabel(value).check()
+    await page.getByRole('button', { name: 'Add filter' }).click()
+    await waitIdle(page)
+  }
+  const heads = await page.locator('.window .head').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))
+  expect(new Set(heads.map(Math.round)).size).toBe(1)
+  const bodies = await page.locator('.window .body').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().top))
+  expect(new Set(bodies.map(Math.round)).size).toBe(1)
+  // Every window's buttons are inside it, even with long filter chips.
+  for (const w of await page.locator('.window').all()) {
+    const wb = (await w.boundingBox())!
+    for (const name of ['Close window', 'More actions']) {
+      const cb = (await w.getByRole('button', { name }).boundingBox())!
+      expect(cb.x + cb.width).toBeLessThanOrEqual(wb.x + wb.width + 0.5)
+    }
+  }
+  await page.locator('.window').nth(5).getByRole('button', { name: 'Close window' }).click()
+  await expect(page.locator('.window')).toHaveCount(5)
+})
+
+test('shift-wheel zooms the rows and updates Show', async ({ page }) => {
+  await open(page)
+  await waitIdle(page)
+  const show = page.locator('#show-n')
+  await expect(show).toHaveValue('')
+  const body = (await page.locator('.window .body').first().boundingBox())!
+  await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2)
+  await page.keyboard.down('Shift')
+  await page.mouse.wheel(0, -600)
+  await page.keyboard.up('Shift')
+  await expect.poll(async () => Number((await show.inputValue()).replace(/,/g, '') || NaN)).toBeLessThan(2000)
+  // Zooming back out shows all rows again.
+  await page.keyboard.down('Shift')
+  for (let i = 0; i < 4; i++) await page.mouse.wheel(0, 1000)
+  await page.keyboard.up('Shift')
+  await expect(show).toHaveValue('')
+})
+
+test('sort preset: sequence durations', async ({ page }) => {
+  await open(page)
+  await addSort(page, 'age')
+  await page.getByText('+ sort').click()
+  await page.getByRole('group', { name: 'Sort presets' }).getByRole('button', { name: /Sequence durations/ }).click()
+  await waitIdle(page)
+  const chips = page.locator('.controls .chip.sort')
+  await expect(chips).toHaveCount(3)
+  await expect(chips.nth(0)).toContainText('duration of 1st episode')
+  await expect(chips.nth(2)).toContainText('duration of 3rd episode')
+})
+
+test('manage datasets: rename, add and remove', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await open(page)
+  await page.getByRole('button', { name: 'Manage datasets' }).click()
+  const mgr = page.getByRole('dialog', { name: 'Manage datasets' })
+  await expect(mgr).toContainText('2,000')
+  await mgr.getByRole('button', { name: 'Dataset', exact: true }).click()
+  await page.getByRole('button', { name: 'Small demo' }).click()
+  await expect(mgr.locator('.ds')).toHaveCount(2, { timeout: 30_000 })
+  const names = mgr.getByRole('textbox', { name: 'Dataset name' })
+  await names.nth(1).fill('Demo')
+  await names.nth(1).press('Enter')
+  // A duplicate name is made unique.
+  await names.nth(0).fill('Demo')
+  await names.nth(0).press('Enter')
+  await expect(names.nth(0)).toHaveValue('Demo_0')
+  await mgr.getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('.window').nth(1).locator('.count')).toHaveAttribute('title', /persons in Demo$|persons in Demo ·/)
+  await page.getByRole('button', { name: 'Manage datasets' }).click()
+  await mgr.locator('.ds').nth(1).getByRole('button', { name: 'Remove' }).click()
+  await expect(mgr.locator('.ds')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(mgr).toHaveCount(0)
+  await expect(page.locator('.window')).toHaveCount(1)
+  expect(errors.join('\n')).toBe('')
+})

@@ -200,6 +200,12 @@
             initial={picking.index !== null ? (app.sort[picking.index]?.col ?? null) : null}
             onclose={() => (picking = null)}
             onpick={pickSort}
+            onpreset={picking.index === null
+              ? (keys) => {
+                  picking = null
+                  app.setSort(keys)
+                }
+              : undefined}
           />
         {/key}
       </div>

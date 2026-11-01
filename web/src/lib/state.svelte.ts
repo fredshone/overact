@@ -138,6 +138,8 @@ class AppState {
   datasets = $state.raw<Dataset[]>([])
   /** The Loader is shown over the windows to add a dataset. */
   adding = $state(false)
+  /** The dataset manager is shown over the windows. */
+  managing = $state(false)
   /** State of the load in progress (or the last one, if it failed). */
   status = $state<'empty' | 'loading' | 'ready' | 'error'>('empty')
   error = $state('')
@@ -473,6 +475,17 @@ class AppState {
     if (!this.windows.length) this.addWindow()
   }
 
+  /** Renames a dataset (names stay unique; an empty name keeps the old one). */
+  renameDataset(id: number, name: string) {
+    const ds = this.datasets.find((d) => d.id === id)
+    name = name.trim()
+    if (!ds || !name || name === ds.name) return
+    const others = this.datasets.filter((d) => d.id !== id).map((d) => d.name)
+    if (others.includes(name)) name = uniqueTitle(name, others)
+    // `datasets` is raw state: replace the object so readers update.
+    this.datasets = this.datasets.map((d) => (d.id === id ? { ...d, name } : d))
+  }
+
   /** Shows another dataset in window `w`, keeping the filter conditions that fit it. */
   setWindowDataset(w: Win, dataset: number) {
     if (w.dataset === dataset) return
@@ -628,6 +641,7 @@ class AppState {
     this.windows = []
     this.windowHeights = {}
     this.adding = false
+    this.managing = false
     this.status = 'empty'
   }
 
@@ -912,6 +926,35 @@ class AppState {
     this.touch()
     this.scrollTo(this.vertical.pos + (dy * span) / h / range)
   }
+
+  /**
+   * Zooms the rows of all windows by `factor` (< 1: in, fewer rows shown),
+   * keeping the row at `at` (0..1 down window `w`, default the middle) in
+   * place. Sets `show`; zoomed all the way out it shows all rows.
+   */
+  zoomRows(factor: number, w?: Win, at = 0.5) {
+    const ref = w ?? this.windows.reduce<Win | undefined>((a, b) => ((b.count ?? 0) > (a?.count ?? -1) ? b : a), undefined)
+    if (!ref) return
+    const { span, total } = this.extent(ref)
+    if (total < 1 || span < 1) return
+    // `show` is whole rows: continue from the unrounded span so that small
+    // steps (trackpad pinches) add up.
+    const z = this.rowZoom
+    const cur = z !== null && this.show !== null && Math.round(z) === this.show && span === this.show ? z : span
+    const next = Math.max(1, Math.min(total, cur * factor))
+    this.touch()
+    const anchor = this.vertical.pos * Math.max(0, total - span) + at * span
+    if (Math.round(next) >= total) {
+      this.rowZoom = null
+      this.show = null
+      this.scrollTo(0)
+      return
+    }
+    this.rowZoom = next
+    this.show = Math.round(next)
+    this.scrollTo((anchor - at * this.show) / (total - this.show))
+  }
+  private rowZoom: number | null = null
 
   scrollTo(pos: number) {
     this.vertical = { ...this.vertical, pos: Math.max(0, Math.min(1, pos)) }
