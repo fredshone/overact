@@ -4,7 +4,7 @@
 // sort runs. `worker.ts` runs it in a dedicated worker; tests run it directly.
 
 import type { WasmEngine as WasmEngineT } from '../../wasm/pkg/overact_wasm.js'
-import type { ColRef, DrawParams, Header, LoadOptions, Request, Source, TableFiles, TableMapping, WorkerEvent } from './types'
+import type { ColRef, DrawParams, Header, LoadOptions, Request, Source, Summary, TableFiles, TableMapping, WorkerEvent } from './types'
 import { Gather, makeSubset } from './subset'
 import { writeParquet } from '../parquet'
 
@@ -361,6 +361,7 @@ export class Host {
         const res = JSON.parse(e.step(this.budget)) as {
           finished: number[]
           profiled: number[]
+          summarized: number[]
           pending: number[]
           progress: number
         }
@@ -372,6 +373,7 @@ export class Host {
           this.post({ type: 'viewReady', view: v, info: JSON.parse(e.view_info(v)), ms })
         }
         for (const v of res.profiled) this.post({ type: 'profileReady', view: v })
+        for (const v of res.summarized) this.post({ type: 'summaryReady', view: v })
         this.post({ type: 'jobProgress', pending: res.pending, progress: res.progress })
         await yieldToEvents()
         continue
@@ -453,6 +455,15 @@ export class Host {
         return null
       case 'profile':
         return this.engine!.profile(req.view) ?? null
+      case 'summary': {
+        // Null until computed: a summaryReady event follows (unless the rows change first).
+        const e = this.engine!
+        if (e.request_summary(req.view)) {
+          this.kick()
+          return null
+        }
+        return JSON.parse(e.summary(req.view)) as Summary | null
+      }
       case 'gutter':
         await this.ensureColumns([req.col])
         return this.engine!.gutter(req.view, JSON.stringify(req.col), req.height, req.rowStart, req.rowEnd)

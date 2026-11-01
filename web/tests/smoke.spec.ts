@@ -587,3 +587,28 @@ test('manage datasets: rename, add and remove', async ({ page }) => {
   await expect(page.locator('.window')).toHaveCount(1)
   expect(errors.join('\n')).toBe('')
 })
+
+test('summary mode shows charts for every window', async ({ page }) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await open(page)
+  await page.getByRole('button', { name: 'Window', exact: true }).click()
+  await waitIdle(page)
+  await page.getByRole('button', { name: 'Summary', exact: true }).click()
+  const panels = page.locator('.window .panel')
+  await expect(panels).toHaveCount(2)
+  for (const name of ['Sequences', 'When and how long', 'Participation and time use', 'Transitions']) {
+    await expect(panels.nth(0).getByRole('heading', { name })).toBeVisible()
+    await expect(panels.nth(1).getByRole('heading', { name })).toBeVisible()
+  }
+  await expect(panels.nth(0)).toContainText(/\d+ distinct/)
+  // Identical windows: identical sequence charts.
+  const seqs = () =>
+    page.locator('.window canvas[aria-label^="Activity sequences"]').evaluateAll((els) => new Set(els.map((e) => (e as HTMLCanvasElement).toDataURL())).size)
+  await expect.poll(seqs).toBe(1)
+  await page.getByRole('button', { name: 'Durations' }).first().click()
+  await page.screenshot({ path: 'test-results/summary.png' })
+  await page.keyboard.press('s')
+  await expect(panels).toHaveCount(0)
+  expect(errors.join('\n')).toBe('')
+})

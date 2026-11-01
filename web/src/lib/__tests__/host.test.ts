@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { Host, type OpenInfo, type Pkg } from '../engine/host'
-import type { Request, ViewSpec, WorkerEvent } from '../engine/types'
+import type { Request, Summary, ViewSpec, WorkerEvent } from '../engine/types'
 
 const url = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 const WASM = url('../../wasm/pkg/overact_wasm_bg.wasm')
@@ -79,6 +79,19 @@ describe.skipIf(!existsSync(WASM))('engine host', () => {
     const last = await call<{ values: (number | null)[] }>({ type: 'hover', view: 1, pos: v.count - 1, cols: [col] })
     expect(first.values[0]!).toBeGreaterThanOrEqual(last.values[0]!)
     expect(await call({ type: 'hover', view: 1, pos: v.count, cols: [] })).toBeNull()
+
+    // Summaries arrive on request; everyone has one sequence, and episodes
+    // per activity add up to the persons.
+    const summarized = next('summaryReady', 1)
+    expect(await call({ type: 'summary', view: 1 })).toBeNull()
+    await summarized
+    const s = (await call<Summary>({ type: 'summary', view: 1 }))!
+    expect(s.n_persons).toBe(v.count)
+    expect(s.sequences.reduce((a, q) => a + q.count, 0)).toBeLessThanOrEqual(v.count)
+    expect(s.n_episodes.reduce((a, b) => a + b, 0)).toBe(v.count)
+    const nA = info.header.activities.length
+    expect(s.episodes.slice(0, 7).reduce((a, b) => a + b, 0)).toBe(v.count)
+    expect(s.trans).toHaveLength((nA + 1) ** 2)
 
     const range = await call<{ min: number; max: number }>({ type: 'columnRange', col })
     expect(range.max).toBeGreaterThanOrEqual(first.values[0]!)

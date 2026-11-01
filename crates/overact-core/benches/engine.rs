@@ -65,6 +65,14 @@ fn main() {
         let t = Instant::now();
         let _p = overact_core::profile::profile(&ds, &rows);
         println!("direct: profile {:.0} ms", ms(t));
+        let t = Instant::now();
+        let all: Vec<u32> = (0..n as u32).collect();
+        let s = overact_core::summary::summarize(&ds, &all);
+        println!(
+            "direct: summary of all {:.0} ms ({} distinct sequences)",
+            ms(t),
+            s.n_distinct
+        );
         let keys = vec![
             SortKey {
                 col: ColRef::Attr { column: age },

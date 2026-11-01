@@ -160,6 +160,48 @@ export interface Inspection {
   bytes: number
 }
 
+/** A sequence or n-gram of activity codes and how often it occurs. */
+export interface Counted {
+  codes: number[]
+  count: number
+}
+
+/**
+ * Aggregate statistics of a view's members: see `overact_core::summary`.
+ * Counts are of episodes (back-to-back segments of one activity merged).
+ * Flat arrays are indexed by activity code first.
+ */
+export interface Summary {
+  n_persons: number
+  n_activities: number
+  /** Minutes per time bin, and the number of bins. */
+  bin: number
+  bins: number
+  /** Most frequent sequences first. */
+  sequences: Counted[]
+  n_distinct: number
+  /**
+   * The sequences after `sequences`, summed up as `[row][col][code]` over
+   * `tail_rows × tail_cols` (rows down the rarer persons, columns across
+   * each sequence's equal-width steps).
+   */
+  tail: number[]
+  tail_rows: number
+  tail_cols: number
+  /** `[code][start bin][duration bin]` episode counts. */
+  start_dur: number[]
+  /** `[code][k]`: persons with k episodes (last bin: or more). */
+  episodes: number[]
+  /** `[code][bin]`: participants by total minutes. */
+  minutes: number[]
+  /** `[k]`: persons with k episodes in total (last: or more). */
+  n_episodes: number[]
+  /** `[from][to]` over n_activities + 1 states (last: start / end of day). */
+  trans: number[]
+  /** Top 3-grams then top 4-grams (occurrences). */
+  ngrams: Counted[]
+}
+
 // Messages main -> worker
 export type Request =
   | { type: 'open'; source: Source; options: LoadOptions }
@@ -172,6 +214,7 @@ export type Request =
   | { type: 'attachCanvas'; view: number; canvas: OffscreenCanvas }
   | { type: 'draw'; view: number; params: DrawParams; exact: boolean }
   | { type: 'profile'; view: number }
+  | { type: 'summary'; view: number }
   | { type: 'gutter'; view: number; col: ColRef; height: number; rowStart: number; rowEnd: number }
   | { type: 'hover'; view: number; pos: number; cols: ColRef[] }
   | { type: 'columnRange'; col: ColRef }
@@ -184,5 +227,6 @@ export type WorkerEvent =
   | { type: 'jobProgress'; pending: number[]; progress: number }
   | { type: 'viewReady'; view: number; info: ViewInfo; ms: number }
   | { type: 'profileReady'; view: number }
+  | { type: 'summaryReady'; view: number }
   | { type: 'drawn'; view: number; ms: number; rasterMs?: number; exact: boolean }
   | { type: 'error'; message: string }

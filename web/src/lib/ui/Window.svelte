@@ -8,6 +8,7 @@
   import WindowHeader from './WindowHeader.svelte'
   import ProfileStrip from './ProfileStrip.svelte'
   import TimeAxis from './TimeAxis.svelte'
+  import SummaryPanel from './summary/SummaryPanel.svelte'
 
   let { win }: { win: Win } = $props()
 
@@ -73,7 +74,8 @@
   $effect(() => {
     const _deps = [win.version, app.redrawToken, app.renderMode, app.maxSamples, app.exactPass, app.interacting]
     void _deps
-    if (!attached || !win.version || cssW < 1 || cssH < 1) return
+    // Hidden under the summary charts: draw when it shows again.
+    if (!attached || !win.version || cssW < 1 || cssH < 1 || app.mode === 'summary') return
     const { t0, t1 } = app.time
     const [rs, re] = rows
     const width = Math.round(cssW * dpr)
@@ -368,8 +370,13 @@
 <section class="window" class:dragging={app.draggingWin === win.id} data-win={win.id} aria-label={win.title}>
   <WindowHeader {win} />
   <div class="rest">
-  {#if app.showProfiles}
+  <!-- In Summary mode the strip scrolls with the summary charts. -->
+  {#if app.showProfiles && app.mode === 'schedules'}
     <ProfileStrip {win} width={cssW} />
+  {/if}
+  <div class="stage">
+  {#if app.mode === 'summary'}
+    <SummaryPanel {win} />
   {/if}
   <TimeAxis width={cssW} {win} />
   <div class="main">
@@ -417,7 +424,8 @@
     </div>
   </div>
   </div>
-  {#if pinned}
+  </div>
+  {#if pinned && app.mode === 'schedules'}
     <div class="pinned">
       <div class="pin-head">
         <b>{pinned.person.id ?? `#${pinned.person.index}`}</b>
@@ -472,6 +480,13 @@
   .window.dragging {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent), var(--shadow);
+  }
+  .stage {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
   .main {
     flex: 1;

@@ -9,6 +9,7 @@ use crate::profile::profile;
 use crate::raster::tests::schedules_strategy;
 use crate::sample::{rank, Sample};
 use crate::sort::SortKey;
+use crate::summary::summarize;
 use crate::testutil::dataset_with_columns;
 use proptest::prelude::*;
 use std::cmp::Ordering;
@@ -237,6 +238,13 @@ proptest! {
         // Re-submitting the same spec is a no-op; a sort-only change reuses the filter.
         engine.submit(7, spec.clone()).unwrap();
         prop_assert!(!engine.has_work());
+        // Summaries are computed on request, of the members.
+        prop_assert!(engine.view(7).unwrap().summary.is_none());
+        prop_assert!(engine.request_summary(7));
+        run(&mut engine, budget);
+        let want_summary = summarize(&engine.ds, &m);
+        prop_assert_eq!(engine.view(7).unwrap().summary.as_deref(), Some(&want_summary));
+        prop_assert!(!engine.request_summary(7));
     }
 
     #[test]
@@ -345,6 +353,60 @@ fn sample_change_reuses_filter_and_recomputes_profile() {
     let v = engine.view(1).unwrap();
     assert!(v.sampled.is_none());
     assert_eq!(v.rows.len(), 3000);
+}
+
+#[test]
+fn summary_survives_resort_and_is_dropped_by_refilter() {
+    let sched: Vec<Vec<(u16, u8)>> = (0..3000)
+        .map(|i| vec![(0, 0), ((i % 50 + 1) as u16, 1)])
+        .collect();
+    let ds = dataset_with_columns(100, 2, &sched, vec![]);
+    let mut engine = Engine::new(ds);
+    engine.submit(1, ViewSpec::default()).unwrap();
+    assert!(!engine.request_summary(1), "no view yet");
+    run(&mut engine, 1000);
+    assert!(engine.request_summary(1));
+    assert!(engine.request_summary(1), "asking twice queues one job");
+    let mut events = 0;
+    while engine.has_work() {
+        events += engine.step(1000).summarized.len();
+    }
+    assert_eq!(events, 1);
+    let by = |a| SortKey {
+        col: ColRef::Virtual(Feature::minutes(a)),
+        desc: false,
+        order: None,
+    };
+    let sorted = ViewSpec {
+        sort: vec![by(1)],
+        ..ViewSpec::default()
+    };
+    engine.submit(1, sorted).unwrap();
+    run(&mut engine, 1000);
+    assert!(
+        engine.view(1).unwrap().summary.is_some(),
+        "sorting keeps it"
+    );
+    let filtered = ViewSpec {
+        filter: vec![Condition {
+            col: ColRef::Virtual(Feature::minutes(1)),
+            test: Test::Range {
+                min: Some(60.0),
+                max: None,
+            },
+            negate: false,
+        }],
+        ..ViewSpec::default()
+    };
+    engine.submit(1, filtered).unwrap();
+    run(&mut engine, 1000);
+    let v = engine.view(1).unwrap();
+    assert!(v.summary.is_none());
+    // A summary job for an old version is dropped by a resubmit.
+    assert!(engine.request_summary(1));
+    engine.submit(1, ViewSpec::default()).unwrap();
+    run(&mut engine, 1000);
+    assert!(engine.view(1).unwrap().summary.is_none());
 }
 
 #[test]

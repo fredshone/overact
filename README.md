@@ -33,6 +33,11 @@ uploaded**.
 - **Exact numbers.** A strip above each window shows the exact share of each
   activity by minute. Hover anywhere for the activity mix at that time in every
   window.
+- **Summary charts.** **Summary** (or `S`) swaps each window's schedules for
+  charts of the same persons: the most common activity sequences (ignoring
+  durations), start time × duration densities per activity, participation and
+  time use, and a transition matrix with the most common 3- and 4-step chains.
+  Scales are shared across windows, so groups compare directly.
 - **Shared controls.** The bar above the windows sets the sort keys (drag to
   reorder), an optional time crop, a random **Sample** of each window's
   filtered persons, and how many rows each window **Shows**.

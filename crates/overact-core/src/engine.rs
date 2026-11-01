@@ -20,6 +20,7 @@ use crate::profile::Profiler;
 use crate::raster::{self, Palette, RasterParams, RasterScratch};
 use crate::sample::{Sample, Sampler};
 use crate::sort::{RadixSorter, SortKey};
+use crate::summary::{Summarizer, Summary};
 
 /// Largest value accepted in an `In` filter (category indices are u16).
 pub const MAX_IN_VALUE: u32 = u16::MAX as u32;
@@ -64,6 +65,9 @@ pub struct View {
     /// Exact activity counts per minute, `[code * axis_len + minute]`.
     /// Computed after the rows are installed (None until then).
     pub profile: Option<Rows>,
+    /// Sequence, density, participation and transition statistics of the
+    /// members. Computed only on request (`request_summary`).
+    pub summary: Option<Arc<Summary>>,
     /// Increments every time the rows change.
     pub version: u32,
 }
@@ -91,7 +95,15 @@ enum Stage {
     Sample(Box<Sampler>),
     Sort(Box<RadixSorter>),
     Profile(Box<Profiler>),
+    Summary(Box<Summarizer>),
     Done,
+}
+
+/// What a follow-up job computes for an installed view.
+#[derive(Clone, Copy, PartialEq)]
+enum FollowUp {
+    Profile,
+    Summary,
 }
 
 struct Job {
@@ -103,11 +115,13 @@ struct Job {
     sampled: Option<Option<Rows>>,
     rows: Option<Rows>,
     profile: Option<Rows>,
+    summary: Option<Arc<Summary>>,
     stage: Stage,
     /// Rough progress, 0..1.
     progress: f64,
-    /// A follow-up job that only computes the profile of view `version`.
-    profile_of: Option<u32>,
+    /// A follow-up job that only computes the profile or summary of view
+    /// `version`.
+    follow_up: Option<(FollowUp, u32)>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -116,6 +130,8 @@ pub struct StepResult {
     pub finished: Vec<u32>,
     /// Views whose profile became available during this step.
     pub profiled: Vec<u32>,
+    /// Views whose summary became available during this step.
+    pub summarized: Vec<u32>,
     /// Views still waiting for a job.
     pub pending: Vec<u32>,
     /// Progress of the running job (0..1).
@@ -135,6 +151,7 @@ pub struct Engine {
     scratch: RasterScratch,
     finished: Vec<u32>,
     profiled: Vec<u32>,
+    summarized: Vec<u32>,
 }
 
 impl Engine {
@@ -150,6 +167,7 @@ impl Engine {
             scratch: RasterScratch::default(),
             finished: Vec::new(),
             profiled: Vec::new(),
+            summarized: Vec::new(),
         }
     }
 
@@ -212,9 +230,9 @@ impl Engine {
         }
         if self.views.get(&view).is_some_and(|v| v.spec == spec) {
             // Already showing this spec: drop any other queued spec, but keep
-            // the follow-up job computing this view's profile.
+            // the follow-up jobs computing this view's profile and summary.
             self.jobs
-                .retain(|j| j.view != view || j.profile_of.is_some());
+                .retain(|j| j.view != view || j.follow_up.is_some());
             return Ok(false);
         }
         self.jobs.retain(|j| j.view != view);
@@ -228,11 +246,11 @@ impl Engine {
                 }
             }
         }
-        // Row jobs go ahead of follow-up profile jobs (which resume later).
+        // Row jobs go ahead of follow-up jobs (which resume later).
         let at = self
             .jobs
             .iter()
-            .position(|j| j.profile_of.is_some())
+            .position(|j| j.follow_up.is_some())
             .unwrap_or(self.jobs.len());
         self.jobs.insert(
             at,
@@ -244,12 +262,46 @@ impl Engine {
                 sampled: None,
                 rows: None,
                 profile: None,
+                summary: None,
                 stage: Stage::Done,
                 progress: 0.0,
-                profile_of: None,
+                follow_up: None,
             },
         );
         Ok(true)
+    }
+
+    /// Asks for a view's summary. Returns false if it is already available
+    /// (or the view does not exist); otherwise a `summarized` event follows,
+    /// unless the view's rows change first (ask again then).
+    pub fn request_summary(&mut self, view: u32) -> bool {
+        let Some(v) = self.views.get(&view) else {
+            return false;
+        };
+        if v.summary.is_some() {
+            return false;
+        }
+        let want = Some((FollowUp::Summary, v.version));
+        if !self
+            .jobs
+            .iter()
+            .any(|j| j.view == view && j.follow_up == want)
+        {
+            self.jobs.push_back(Job {
+                view,
+                spec: ViewSpec::default(),
+                todo_virtual: Vec::new(),
+                filtered: None,
+                sampled: None,
+                rows: None,
+                profile: None,
+                summary: None,
+                stage: Stage::Done,
+                progress: 0.0,
+                follow_up: want,
+            });
+        }
+        true
     }
 
     pub fn drop_view(&mut self, view: u32) {
@@ -269,8 +321,8 @@ impl Engine {
     /// finishing jobs (and starting the next one) as needed.
     fn start_next_stage(&mut self) {
         while let Some(job) = self.jobs.front() {
-            let more = if job.profile_of.is_some() {
-                self.next_profile_stage()
+            let more = if job.follow_up.is_some() {
+                self.next_follow_up_stage()
             } else {
                 self.next_row_stage()
             };
@@ -280,26 +332,41 @@ impl Engine {
         }
     }
 
-    /// For a follow-up profile job: starts (or resumes) the profile, or
+    /// For a follow-up job: starts (or resumes) the profile or summary, or
     /// installs the finished one. Returns true if the job has a stage to run.
-    fn next_profile_stage(&mut self) -> bool {
+    fn next_follow_up_stage(&mut self) -> bool {
         let job = self.jobs.front_mut().unwrap();
-        if job.profile.is_none() {
-            // Start the profile, or resume one that another job overtook.
+        let (kind, version) = job.follow_up.unwrap();
+        let done = match kind {
+            FollowUp::Profile => job.profile.is_some(),
+            FollowUp::Summary => job.summary.is_some(),
+        };
+        if !done {
+            // Start, or resume a stage that another job overtook.
             if matches!(job.stage, Stage::Done) {
-                job.stage = Stage::Profile(Box::new(Profiler::new(&self.ds)));
+                job.stage = match kind {
+                    FollowUp::Profile => Stage::Profile(Box::new(Profiler::new(&self.ds))),
+                    FollowUp::Summary => Stage::Summary(Box::new(Summarizer::new(&self.ds))),
+                };
             }
             return true;
         }
         let job = self.jobs.pop_front().unwrap();
-        let version = job.profile_of.unwrap();
         if let Some(v) = self
             .views
             .get_mut(&job.view)
             .filter(|v| v.version == version)
         {
-            v.profile = job.profile;
-            self.profiled.push(job.view);
+            match kind {
+                FollowUp::Profile => {
+                    v.profile = job.profile;
+                    self.profiled.push(job.view);
+                }
+                FollowUp::Summary => {
+                    v.summary = job.summary;
+                    self.summarized.push(job.view);
+                }
+            }
         }
         false
     }
@@ -329,6 +396,7 @@ impl Engine {
                 if v.spec.sample == job.spec.sample {
                     job.sampled = Some(v.sampled.clone());
                     job.profile = v.profile.clone();
+                    job.summary = v.summary.clone();
                 }
             } else {
                 job.stage = filter_stage(&self.ds, &self.virtuals, &job.spec.filter);
@@ -383,12 +451,13 @@ impl Engine {
                 sampled: job.sampled.take().unwrap(),
                 rows: job.rows.take().unwrap(),
                 profile: job.profile.take(),
+                summary: job.summary.take(),
                 version,
             },
         );
         self.finished.push(job.view);
         if need_profile {
-            job.profile_of = Some(version);
+            job.follow_up = Some((FollowUp::Profile, version));
             job.stage = Stage::Done;
             job.progress = 0.95;
             self.jobs.push_front(job);
@@ -438,6 +507,7 @@ impl Engine {
         let mut left = budget as i64;
         self.finished.clear();
         self.profiled.clear();
+        self.summarized.clear();
         while left > 0 && !self.jobs.is_empty() {
             let used = self.step_stage(left as usize);
             left -= used.max(1) as i64;
@@ -445,6 +515,7 @@ impl Engine {
         StepResult {
             finished: std::mem::take(&mut self.finished),
             profiled: std::mem::take(&mut self.profiled),
+            summarized: std::mem::take(&mut self.summarized),
             pending: self.jobs.iter().map(|j| j.view).collect(),
             progress: self.jobs.front().map_or(1.0, |j| j.progress),
         }
@@ -547,6 +618,12 @@ impl Engine {
                 stage_done = p.step(ds, rows, b);
                 used = b * 8;
             }
+            Stage::Summary(s) => {
+                let rows = views.get(&job.view).map_or(&[][..], |v| v.members());
+                let b = (budget / 16).max(1);
+                stage_done = s.step(ds, rows, b);
+                used = b * 16;
+            }
         }
         if stage_done {
             let stage = std::mem::replace(&mut job.stage, Stage::Done);
@@ -557,6 +634,7 @@ impl Engine {
                 Stage::Sample(s) => job.sampled = Some(Some(Arc::new(s.into_rows()))),
                 Stage::Sort(s) => job.rows = Some(Arc::new(s.into_rows())),
                 Stage::Profile(p) => job.profile = Some(Arc::new(p.finish())),
+                Stage::Summary(s) => job.summary = Some(Arc::new(s.finish(ds))),
                 _ => {}
             }
             self.start_next_stage();

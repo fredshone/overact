@@ -14,6 +14,7 @@ pub mod profile;
 pub mod raster;
 pub mod sample;
 pub mod sort;
+pub mod summary;
 
 #[cfg(test)]
 mod tests_engine;

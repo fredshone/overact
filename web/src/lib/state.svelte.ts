@@ -9,12 +9,14 @@ import type {
   RenderMode,
   SortKey,
   Source,
+  Summary,
   TableFiles,
   TableMapping,
   ViewSpec,
 } from './engine/types'
 import { colMeta, uniqueTitle } from './format'
 import { defaultColors, hexToInt } from './palette'
+import { remapSummary, type DensityView } from './summary'
 import { incompatibility, remapProfile, toUnionCodes, translateFilter, translateSort, unionHeader } from './datasets'
 import {
   decodeHash,
@@ -77,6 +79,10 @@ export interface Win {
   jobMs: number
   /** The rows changed and `profile` still shows the previous ones. */
   profilePending: boolean
+  /** Sequence, density, participation and transition statistics (Summary mode). */
+  summary: Summary | null
+  /** `summary` is for previous rows (or missing) and a new one is coming. */
+  summaryPending: boolean
 }
 
 export interface ActivityStyle {
@@ -87,6 +93,8 @@ export interface ActivityStyle {
 }
 
 export type VerticalMode = 'fit' | 'rows'
+/** What window bodies show: the schedules, or summary charts of them. */
+export type BodyMode = 'schedules' | 'summary'
 export type Theme = 'system' | 'light' | 'dark'
 
 /** A message shown at the bottom of the screen until dismissed or timed out. */
@@ -195,6 +203,13 @@ class AppState {
   colors = $state.raw<ThemeColors>({ fg: '#1d1d1f', accent: '#2f5bd3', canvasBg: '#ffffff' })
   showHelp = $state(false)
   showProfiles = $state(true)
+  mode = $state<BodyMode>('schedules')
+  /** Height of the sequence charts in Summary mode, CSS px (all windows). */
+  sequenceHeight = $state(240)
+  /** Scroll position of the summary panels (linked across windows), CSS px. */
+  summaryScroll = $state(0)
+  /** What the start × duration card shows. */
+  densityView = $state<DensityView>('density')
   /** True while the user is scrolling/zooming/dragging: draw with fewer samples. */
   interacting = $state(false)
   private interactTimer: ReturnType<typeof setTimeout> | undefined
@@ -516,6 +531,8 @@ class AppState {
       renderMode: this.renderMode,
       maxSamples: this.maxSamples,
       profileHeight: this.profileHeight,
+      ...(this.mode === 'summary' ? { mode: this.mode } : {}),
+      sequenceHeight: this.sequenceHeight,
       sort: this.sort.map((k) => nameSort(h, $state.snapshot(k) as SortKey)),
       windows: this.windows.map((w) => {
         const d = this.datasetOf(w)
@@ -575,6 +592,8 @@ class AppState {
     this.renderMode = cfg.renderMode === 1 || cfg.renderMode === 2 ? cfg.renderMode : 0
     if (SAMPLE_CHOICES.includes(cfg.maxSamples)) this.maxSamples = cfg.maxSamples
     if (Number.isFinite(cfg.profileHeight) && cfg.profileHeight! > 0) this.profileHeight = Math.min(2000, cfg.profileHeight!)
+    this.mode = cfg.mode === 'summary' ? 'summary' : 'schedules'
+    if (Number.isFinite(cfg.sequenceHeight) && cfg.sequenceHeight! > 0) this.sequenceHeight = Math.min(4000, cfg.sequenceHeight!)
     this.sort = sort
     this.refreshSortRange()
     for (const w of this.windows) this.datasetOf(w).client.dropView(w.id)
@@ -658,6 +677,8 @@ class AppState {
         if (!w) break
         // The profile follows (an unchanged filter reuses it: profileReady comes at once).
         if (ev.ms > 0) w.profilePending = true
+        if (ev.ms > 0) w.summaryPending = true
+        if (this.mode === 'summary') this.fetchSummary(w)
         w.count = ev.info.count
         w.matched = ev.info.matched
         w.version = ev.info.version + 1
@@ -675,6 +696,11 @@ class AppState {
       case 'profileReady': {
         const w = this.windows.find((w) => w.id === ev.view)
         if (w) this.fetchProfile(w)
+        break
+      }
+      case 'summaryReady': {
+        const w = this.windows.find((w) => w.id === ev.view)
+        if (w) this.fetchSummary(w)
         break
       }
       case 'jobProgress':
@@ -700,6 +726,30 @@ class AppState {
       if (p) cur.profile = remapProfile(p, ds.toUnion, this.header.activities.length, this.axisLen)
       cur.profilePending = false
     })
+  }
+
+  /**
+   * Gets a window's summary (codes moved to the union's), asking for it if
+   * needed: then a summaryReady event brings it.
+   */
+  private fetchSummary(w: Win) {
+    const ds = this.datasetOf(w)
+    ds.client.summary(w.id).then((s) => {
+      const cur = this.windows.find((x) => x.id === w.id)
+      if (!cur || !this.header) return
+      if (!s) {
+        cur.summaryPending = true
+        return
+      }
+      cur.summary = remapSummary(s, ds.toUnion, this.header.activities.length)
+      cur.summaryPending = false
+    })
+  }
+
+  /** Switches window bodies between schedules and summary charts. */
+  setMode(mode: BodyMode) {
+    this.mode = mode
+    if (mode === 'summary') for (const w of this.windows) this.fetchSummary(w)
   }
 
   async submit(w: Win) {
@@ -745,6 +795,8 @@ class AppState {
       profile: null,
       jobMs: 0,
       profilePending: false,
+      summary: null,
+      summaryPending: true,
     }
     this.windows.push(w)
     // Submit after the window's canvas is attached (see Window.svelte).
